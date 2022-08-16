@@ -9,6 +9,56 @@ import ResizeObserver from 'rc-resize-observer';
 import { VariableSizeGrid as Grid } from 'react-window';
 import Column from 'antd/lib/table/Column';
 
+function calcWidth(stringWidth, tableWidth) {
+	// regex match '50px' '50%'
+	const regex = /^(\d*\.?\d+)((?:px|%)?)$/i;
+	const matches = stringWidth.match(regex);
+	const number = matches[1];
+	const unit = matches[2];
+
+	let width = 0;
+
+	switch (unit) {
+		case '%':
+			width = (tableWidth * number) / 100;
+			break;
+		case 'px':
+			width = number;
+			break;
+		default:
+			throw new Error('Invalid Unit!!!!!!!!!');
+	}
+
+	return Number(width);
+}
+function calcString(string, tableWidth) {
+	const numbers = string.split(/\s?[+-]\s?/);
+	const operators = string
+		.split(/\s?\d+(?:px|%)\s?/)
+		.filter((operator) => operator !== '');
+
+	let result = calcWidth(numbers[0], tableWidth);
+
+	for (let i = 1; i < numbers.length; i++) {
+		const widthCurrent = calcWidth(numbers[i], tableWidth);
+
+		switch (operators[i - 1]) {
+			case '-':
+				result = result - widthCurrent;
+
+				break;
+			case '+':
+				result = widthCurrent + widthCurrent;
+
+				break;
+			default:
+				throw new Error('Invalid operator!!!!!!!!!!!!!!');
+		}
+	}
+
+	return result;
+}
+
 const VirtualTable = (props) => {
 	const { columns, scroll } = props;
 	const [tableWidth, setTableWidth] = useState(0);
@@ -17,23 +67,26 @@ const VirtualTable = (props) => {
 	const mergedColumns = columns.map((column) => {
 		if (column.width) {
 			let width = 0;
-			const regex = /(\d*\.?\d+)((?:px|%)?)/i;
+			const regex = /^(\d*\.?\d+)((?:px|%)?)$/i;
+			const regexOperator = /(.+)\s([+-])\s(.+)/;
 
+			// match '40px' '50%'
 			if (regex.test(`${column.width}`)) {
-				const result = column.width.match(regex);
-				if (result[2] === '%') {
-					width = (result[1] * tableWidth) / 100;
-				} else {
-					width = result[1];
-				}
+				width = calcWidth(column.width, tableWidth);
+			}
+
+			// match '40px + - 50%'
+			if (regexOperator.test(column.width)) {
+				width = calcString(column.width, tableWidth);
 			}
 
 			return { ...column, width: Number(width) };
+		} else {
+			return {
+				...column,
+				width: Math.floor(tableWidth / widthColumnCount),
+			};
 		}
-		return {
-			...column,
-			width: Math.floor(tableWidth / widthColumnCount),
-		};
 	});
 
 	const gridRef = useRef();
@@ -68,7 +121,7 @@ const VirtualTable = (props) => {
 	useEffect(() => resetVirtualGrid, [tableWidth]);
 
 	const renderVirtualList = (rawData, { scrollbarSize, ref, onScroll }) => {
-		ref.current = connectObject;
+		// ref.current = connectObject;
 		const totalHeight = rawData.length * 54;
 		return (
 			<Grid
@@ -84,12 +137,7 @@ const VirtualTable = (props) => {
 				height={scroll.y + 55}
 				rowCount={rawData.length}
 				rowHeight={() => 54}
-				width={tableWidth}
-				onScroll={({ scrollLeft }) => {
-					onScroll({
-						scrollLeft,
-					});
-				}}>
+				width={tableWidth}>
 				{({ columnIndex, rowIndex, style }) => {
 					return (
 						<div
@@ -97,7 +145,6 @@ const VirtualTable = (props) => {
 								'virtual-table-cell-last': rowIndex === data.length - 1,
 							})}
 							style={style}>
-							{/* {rawData[rowIndex][mergedColumns[columnIndex].title]} */}
 							{mergedColumns[columnIndex].render(rawData[rowIndex])}
 						</div>
 					);
@@ -112,15 +159,13 @@ const VirtualTable = (props) => {
 			}}>
 			<Table
 				{...props}
-				rowSelection={rowSelection}
 				className='virtual-table'
 				columns={mergedColumns}
 				pagination={false}
 				components={{
-					// body: renderVirtualList,
-					// header: null,
 					body: renderVirtualList,
-				}}></Table>
+				}}
+			/>
 		</ResizeObserver>
 	);
 };
@@ -135,12 +180,6 @@ const rowSelection = {
 };
 
 const data = [
-	{
-		id: 'daingo',
-		name: 'Name',
-		type: 'Type',
-		grade: 'Grade',
-	},
 	{
 		id: 'c:51174',
 		name: '0 1 lop hoc',
@@ -12519,7 +12558,7 @@ const data = [
 		type: 'STUDENT',
 		grade: 'Grade K',
 	},
-];
+].slice(0, 10);
 const App = () => {
 	const [selectedList, setSelectedList] = useState([]);
 
@@ -12548,22 +12587,22 @@ const App = () => {
 			},
 		},
 		{
-			title: '',
+			title: 'Name',
 			width: '30%',
 			render: (record) => {
 				return <span>{record.name}</span>;
 			},
 		},
 		{
-			title: '',
+			title: 'Type',
 			width: '30%',
 			render: (record) => {
 				return <span>{record.type}</span>;
 			},
 		},
 		{
-			title: '',
-			width: 'auto',
+			title: 'Grade',
+			width: '40% - 50px',
 			render: (record) => {
 				return <span>{record.grade}</span>;
 			},
@@ -12580,7 +12619,7 @@ const App = () => {
 				dataSource={data}
 				scroll={{
 					y: 200,
-					x: 500,
+					// x: 500,
 				}}
 			/>
 		</div>
